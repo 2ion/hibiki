@@ -28,6 +28,34 @@ function gcurrentsong()
 	return mpd["playlist"][lcurrentsong()]
 end
 
+-- displays a popup menu where the track to play will be selected
+function playlistmenu()
+	lplaylist()
+	menuitems = {}
+	for key,value in mpd["playlist"] do
+		menuitems[key] = { value.pos .. value.title, function () pplayfromlist(value.pos) end }
+	end
+	awful.menu.show({ menuitems }, nil, true)
+end
+
+function pplay()
+end
+
+function ppause()
+end
+
+function pstop()
+end
+
+function pnext()
+end
+
+function pprevious()
+end
+
+function pplayfromlist(index)
+end
+
 local function lplaylist()
 	-- parse playlist
 	local pos = 0
