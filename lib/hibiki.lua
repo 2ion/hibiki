@@ -34,7 +34,7 @@ function retrieve_playlist_co(daemon_handle)
 	for thread_handle=1,table.maxn(daemon_handle) do
 		table.insert(coroutines, coroutine.create(
 			function (daemon)
-				local position = 0
+				local position = -1
 				local stream = io.popen("echo playlistinfo |" .. daemon.telnet)
 				daemon.playlist = {}
 				for line in stream:lines() do
@@ -42,14 +42,15 @@ function retrieve_playlist_co(daemon_handle)
 						if key=="file" then
 							position = position + 1
 							daemon.playlist[position] = { pos=position, file=value }
-						elseif key=="Time" then daemon.playlist[position][key] = value
-						elseif key=="Artist" then daemon.playlist[position][key] = value
-						elseif key=="Title" then daemon.playlist[position][key] = value
-						elseif key=="Album" then daemon.playlist[position][key] = value
-						elseif key=="Track" then daemon.playlist[position][key] = value
-						elseif key=="Date" then daemon.playlist[position][key] = value
-						elseif key=="Composer" then daemon.playlist[position][key] = value
-						elseif key=="Id" then daemon.playlist[position][key] = value
+--						elseif key=="Time" then daemon.playlist[position][key] = value
+--						elseif key=="Artist" then daemon.playlist[position][key] = value
+--						elseif key=="Title" then daemon.playlist[position][key] = value
+--						elseif key=="Album" then daemon.playlist[position][key] = value
+--						elseif key=="Track" then daemon.playlist[position][key] = value
+--						elseif key=="Date" then daemon.playlist[position][key] = value
+--						elseif key=="Composer" then daemon.playlist[position][key] = value
+--						elseif key=="Id" then daemon.playlist[position][key] = value
+						else daemon.playlist[position][key] = value
 						end
 					end
 				end
@@ -88,14 +89,15 @@ function retrieve_playlist(daemon_handle)
                     daemon.playlist = {}
                     position = position + 1
                     daemon.playlist[position] = { pos=position, file=value }
-                elseif key=="Time" then daemon.playlist[position][key] = tonumber(value)
-                elseif key=="Artist" then daemon.playlist[position][key] = value
-                elseif key=="Title" then daemon.playlist[position][key] = value
-                elseif key=="Album" then daemon.playlist[position][key] = value
-                elseif key=="Track" then daemon.playlist[position][key] = value
-                elseif key=="Date" then daemon.playlist[position][key] = value
-                elseif key=="Composer" then daemon.playlist[position][key] = value
-                elseif key=="Id" then daemon.playlist[position][key] = value
+--                elseif key=="Time" then daemon.playlist[position][key] = tonumber(value)
+--                elseif key=="Artist" then daemon.playlist[position][key] = value
+--                elseif key=="Title" then daemon.playlist[position][key] = value
+--                elseif key=="Album" then daemon.playlist[position][key] = value
+--                elseif key=="Track" then daemon.playlist[position][key] = value
+--                elseif key=="Date" then daemon.playlist[position][key] = value
+--                elseif key=="Composer" then daemon.playlist[position][key] = value
+--                elseif key=="Id" then daemon.playlist[position][key] = value
+				else daemon.playlist[position][key] = value
                 end
             end
         end
@@ -139,7 +141,33 @@ function control_playback(daemon_handle, cmd, positional_argument)
 end
 
 function retrieve_daemon_status(daemon_handle)
-	--TODO:Use all the nice coroutines!!!
+	local coroutines = {}
+	for counter=1,table.maxn(daemon_handle) do
+		table.insert(coroutines, coroutine.create(
+			function (daemon)
+				daemon.status = {}
+				local stream = io.popen("echo status |" .. daemon.telnet)
+				for line in stream:lines() do
+					for key,value in string.gmatch(line, "([%w]+):[%s](.*)") do
+						daemon.status[key]=value
+					end
+				end
+				stream:close()
+			end
+		))
+	end
+
+	for key,routine in ipairs(coroutines) do
+		print(coroutine.resume(routine, DAEMONS[table.remove(daemon_handle)]))
+	end
+end
+
+function print_daemon(daemon_handle)
+	for key,value in ipairs(DAEMONS[daemon_handle].playlist) do
+		print(value.file, value.Title, value.Pos)
+	end
+	print(DAEMONS[daemon_handle].status.state)
+	print(DAEMONS[daemon_handle].playlist.last)
 end
 
 function init(servers)
@@ -161,4 +189,4 @@ function init(servers)
     end
 	FLAGS.ready=true
 end
-
+--vim: tabstop=4
