@@ -17,13 +17,14 @@ local print = print
 local ipairs = ipairs
 local tonumber = tonumber
 local tostring = tostring
---local awful = require("awful")
+local awful = require("awful")
 --local naughty = require("naughty")
 module("hibiki")
 -- }}}
 
 -- {{{ private and public tables
 local DAEMONS = {}
+local DAEMON_STATUS_KEYS = {}
 FLAGS = {
 	ready=false
 }
@@ -42,14 +43,6 @@ function retrieve_playlist_co(daemon_handle)
 						if key=="file" then
 							position = position + 1
 							daemon.playlist[position] = { pos=position, file=value }
---						elseif key=="Time" then daemon.playlist[position][key] = value
---						elseif key=="Artist" then daemon.playlist[position][key] = value
---						elseif key=="Title" then daemon.playlist[position][key] = value
---						elseif key=="Album" then daemon.playlist[position][key] = value
---						elseif key=="Track" then daemon.playlist[position][key] = value
---						elseif key=="Date" then daemon.playlist[position][key] = value
---						elseif key=="Composer" then daemon.playlist[position][key] = value
---						elseif key=="Id" then daemon.playlist[position][key] = value
 						else daemon.playlist[position][key] = value
 						end
 					end
@@ -89,14 +82,6 @@ function retrieve_playlist(daemon_handle)
                     daemon.playlist = {}
                     position = position + 1
                     daemon.playlist[position] = { pos=position, file=value }
---                elseif key=="Time" then daemon.playlist[position][key] = tonumber(value)
---                elseif key=="Artist" then daemon.playlist[position][key] = value
---                elseif key=="Title" then daemon.playlist[position][key] = value
---                elseif key=="Album" then daemon.playlist[position][key] = value
---                elseif key=="Track" then daemon.playlist[position][key] = value
---                elseif key=="Date" then daemon.playlist[position][key] = value
---                elseif key=="Composer" then daemon.playlist[position][key] = value
---                elseif key=="Id" then daemon.playlist[position][key] = value
 				else daemon.playlist[position][key] = value
                 end
             end
@@ -162,6 +147,32 @@ function retrieve_daemon_status(daemon_handle)
 	end
 end
 
+function retrieve_daemon_status_keylist()
+	local daemon = DAEMONS[1]
+	local stream = io.popen("echo status |" .. daemon.telnet)
+	for line in stream:lines() do
+		for key,value in string.gmatch(line, "([%w]+):[%s](.*)") do
+			table.insert(DAEMON_STATUS_KEYS, key)
+		end
+	end
+	stream:close()
+end
+
+function daemon_status_diff(daemon_handle)
+	local daemon = DAEMONS[daemon_handle]
+	local old = awful.table.clone(daemon.status)
+	local diff = {}
+	retrieve_daemon_status({daemon_handle})
+	for key,field in ipairs(DAEMON_STATUS_KEYS) do
+		if daemon.status[field]~=old[field] then
+			table.insert(diff, field)	
+		end
+	end
+	if #diff>0 then return true,diff
+	else return false
+	end
+end
+
 function print_daemon(daemon_handle)
 	for key,value in ipairs(DAEMONS[daemon_handle].playlist) do
 		print(value.file, value.Title, value.Pos)
@@ -187,6 +198,10 @@ function init(servers)
             daemon.telnet="curl -fsm1 telnet://" .. daemon.host .. ":" .. daemon.port
         end
     end
-	FLAGS.ready=true
+	if #DAEMONS>0 then	
+		FLAGS.ready=true
+		retrieve_daemon_status_keylist()
+	else
+		return nil
+	end
 end
---vim: tabstop=4
