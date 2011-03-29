@@ -25,6 +25,7 @@ module("hibiki")
 
 -- {{{ private and public
 local DAEMONS = {}
+local WORKERS = {}
 local DAEMON_STATUS_KEYS = {}
 FLAGS = {
 	ready=false
@@ -168,13 +169,32 @@ function popup_playlist(daemon_handle)
 	awful.menu.show(awesome_menu, { keygrabber=true })
 end
 
-function install_workers()
-	for key,value in ipairs(DAEMONS); do
-		value.worker = coroutine.create(
-			function ()
-				
+function create_workers()
+	for X=1,#DAEMONS do
+		table.insert(WORKERS, coroutine.create(
+			function (daemon, daemon_handle, timer)
+				daemon.status_old = awful.table.clone(daemon.status)
+				daemon.status = {}
+				daemon.status_diff = {}
+				local stream = io.popen("echo status |" .. daemon.telnet)
+				for line in stream:lines() do
+					for key,value in string.gmatch(line, "([%w]+):[%s](.*)") do
+						daemon.status[key] = value
+					end
+				end
+				stream:close()
+
+				for key,field in ipairs(DAEMON_STATUS_KEYS) do
+					if daemon.status[field] ~= daemon.status_old[field] then
+						table.insert(daemon.status_diff, field)
+					end
+				end
+
+				if #daemon.status_diff>0 then
+					timer.emit_signal("daemon_status_changed", daemon)	
+				end
 			end
-		)
+		))
 	end
 end
 
