@@ -22,7 +22,7 @@ local awful = require("awful")
 module("hibiki")
 -- }}}
 
--- {{{ private and public tables
+-- {{{ private and public
 local DAEMONS = {}
 local DAEMON_STATUS_KEYS = {}
 FLAGS = {
@@ -30,7 +30,7 @@ FLAGS = {
 }
 -- }}}
 
-function retrieve_playlist_co(daemon_handle)
+function retrieve_playlist(daemon_handle)
 	local coroutines = {}
 	for thread_handle=1,table.maxn(daemon_handle) do
 		table.insert(coroutines, coroutine.create(
@@ -56,39 +56,6 @@ function retrieve_playlist_co(daemon_handle)
 	for key,routine in ipairs(coroutines) do
 		print(coroutine.resume(routine, DAEMONS[table.remove(daemon_handle)]))
 	end
-end
-
-function retrieve_playlist(daemon_handle)
-    local queue = {}
-    if type(daemon_handle)=="number" then
-        if not DAEMONS[daemon_handle] then
-			print("here")
-            return nil
-        else
-            table.insert(queue, DAEMONS[daemon_handle])
-        end
-    elseif type(daemon_handle)=="table" then
-        for key,value in ipairs(daemon_handle) do
-            table.insert(queue, DAEMONS[tonumber(value)])
-        end
-    else return nil
-    end    
-    for key,daemon in ipairs(queue) do
-        local position = 0
-        local stream = io.popen("echo playlistinfo |" .. daemon.telnet)
-        for line in stream:lines() do
-            for key,value in string.gmatch(line, "([%w]+):[%s](.*)") do
-                if key=="file" then
-                    daemon.playlist = {}
-                    position = position + 1
-                    daemon.playlist[position] = { pos=position, file=value }
-				else daemon.playlist[position][key] = value
-                end
-            end
-        end
-        stream:close()
-        daemon.playlist.last = position
-    end
 end
 
 function retrieve_position(daemon_handle)
@@ -179,6 +146,28 @@ function print_daemon(daemon_handle)
 	end
 	print(DAEMONS[daemon_handle].status.state)
 	print(DAEMONS[daemon_handle].playlist.last)
+end
+
+function create_workers()
+	for key,daemon in ipairs(DAEMONS) do
+		daemon.timer = awful.timer
+
+	end
+end
+
+function create_playlist_menu(daemon_handle)
+	local daemon_handle = daemon_handle --eventually unnec.
+	local menu = { items={} }
+	for key,value in DAEMONS[daemon_handle].playlist do
+		table.insert(menu.items,
+			{
+				value.Pos .. value.Artist .. " - " .. value.Title,
+				control_playback(daemon_handle, "play", value.Pos),
+				nil, --submenu table or function
+				nil --item icon				
+			})
+	end
+	return menu
 end
 
 function init(servers)
