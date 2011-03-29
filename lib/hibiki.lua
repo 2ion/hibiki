@@ -7,6 +7,7 @@
 -- Obtainable through https://github.com/2ion/hibiki
 
 -- {{{ separate environment
+local math = require("math")
 local coroutine = coroutine
 local io = io
 local string = string
@@ -18,7 +19,7 @@ local ipairs = ipairs
 local tonumber = tonumber
 local tostring = tostring
 local awful = require("awful")
---local naughty = require("naughty")
+local naughty = require("naughty")
 module("hibiki")
 -- }}}
 
@@ -30,12 +31,16 @@ FLAGS = {
 }
 -- }}}
 
+local function dbg_notify(text)
+	naughty.notify({ title="hibiki",text=text })
+end
+
 function retrieve_playlist(daemon_handle)
 	local coroutines = {}
 	for thread_handle=1,table.maxn(daemon_handle) do
 		table.insert(coroutines, coroutine.create(
 			function (daemon)
-				local position = -1
+				local position = 0
 				local stream = io.popen("echo playlistinfo |" .. daemon.telnet)
 				daemon.playlist = {}
 				for line in stream:lines() do
@@ -54,7 +59,7 @@ function retrieve_playlist(daemon_handle)
 	end
 
 	for key,routine in ipairs(coroutines) do
-		print(coroutine.resume(routine, DAEMONS[table.remove(daemon_handle)]))
+		coroutine.resume(routine, DAEMONS[table.remove(daemon_handle)])
 	end
 end
 
@@ -110,7 +115,7 @@ function retrieve_daemon_status(daemon_handle)
 	end
 
 	for key,routine in ipairs(coroutines) do
-		print(coroutine.resume(routine, DAEMONS[table.remove(daemon_handle)]))
+		coroutine.resume(routine, DAEMONS[table.remove(daemon_handle)])
 	end
 end
 
@@ -133,6 +138,7 @@ function daemon_status_diff(daemon_handle)
 	for key,field in ipairs(DAEMON_STATUS_KEYS) do
 		if daemon.status[field]~=old[field] then
 			table.insert(diff, field)	
+			diff[field]={ new=daemon.status[field], old=old[field] }
 		end
 	end
 	if #diff>0 then return true,diff
@@ -140,34 +146,36 @@ function daemon_status_diff(daemon_handle)
 	end
 end
 
-function print_daemon(daemon_handle)
+function playlist_menu_items(daemon_handle)
+	local items = {}
 	for key,value in ipairs(DAEMONS[daemon_handle].playlist) do
-		print(value.file, value.Title, value.Pos)
-	end
-	print(DAEMONS[daemon_handle].status.state)
-	print(DAEMONS[daemon_handle].playlist.last)
-end
-
-function create_workers()
-	for key,daemon in ipairs(DAEMONS) do
-		daemon.timer = awful.timer
-
-	end
-end
-
-function create_playlist_menu(daemon_handle)
-	local daemon_handle = daemon_handle --eventually unnec.
-	local menu = { items={} }
-	for key,value in DAEMONS[daemon_handle].playlist do
-		table.insert(menu.items,
+		table.insert(items,
 			{
-				value.Pos .. value.Artist .. " - " .. value.Title,
-				control_playback(daemon_handle, "play", value.Pos),
+				value.Pos .. "\t" .. value.Artist .. ": " .. value.Title,
+				function() control_playback(daemon_handle, "play", value.Pos) end,
 				nil, --submenu table or function
 				nil --item icon				
 			})
 	end
-	return menu
+	return items
+end
+
+function popup_playlist(daemon_handle)
+	retrieve_playlist({daemon_handle})
+	local menu_items = playlist_menu_items(daemon_handle)
+	local menu = { items=menu_items, width=350, height=20}
+	local awesome_menu = awful.menu.new(menu)
+	awful.menu.show(awesome_menu, { keygrabber=true })
+end
+
+function install_workers()
+	for key,value in ipairs(DAEMONS); do
+		value.worker = coroutine.create(
+			function ()
+				
+			end
+		)
+	end
 end
 
 function init(servers)
