@@ -171,25 +171,25 @@ end
 
 function diff_slot(daemon)
 	for key,field in ipairs(daemon.status_diff) do
-		if field == "volume" then true
-		elseif field == "repeat" then true
-		elseif field == "random" then true
-		elseif field == "single" then true
-		elseif field == "consume" then true
-		elseif field == "playlist" then true
-		elseif field == "playlistlength" then true
-		elseif field == "xfade" then true
-		elseif field == "mixrampdb" then true
-		elseif field == "mixrampdelay" then true
-		elseif field == "state" then true
-		elseif field == "song" then true
-		elseif field == "songid" then true
-		elseif field == "time" then true
-		elseif field == "elapsed" then true
-		elseif field == "bitrate" then true
-		elseif field == "audio" then true
-		elseif field == "nextsong" then true
-		elseif field == "nextsongid" then true
+		if field == "volume" then break
+		elseif field == "repeat" then break
+		elseif field == "random" then break
+		elseif field == "single" then break
+		elseif field == "consume" then break
+		elseif field == "playlist" then break
+		elseif field == "playlistlength" then break
+		elseif field == "xfade" then break
+		elseif field == "mixrampdb" then break
+		elseif field == "mixrampdelay" then break
+		elseif field == "state" then break
+		elseif field == "song" then break
+		elseif field == "songid" then break
+		elseif field == "time" then break
+		elseif field == "elapsed" then break
+		elseif field == "bitrate" then break
+		elseif field == "audio" then break
+		elseif field == "nextsong" then break
+		elseif field == "nextsongid" then break
 		end
 	end
 
@@ -200,25 +200,28 @@ function setup_workers()
 	for X=1,#DAEMONS do
 		table.insert(WORKERS, coroutine.create(
 			function (daemon)
-				daemon.status_old = awful.table.clone(daemon.status)
-				daemon.status = {}
-				daemon.status_diff = {}
-				local stream = io.popen("echo status |" .. daemon.telnet)
-				for line in stream:lines() do
-					for key,value in string.gmatch(line, "([%w]+):[%s](.*)") do
-						daemon.status[key] = value
+				while true do
+					daemon.status_old = awful.table.clone(daemon.status)
+					daemon.status = {}
+					daemon.status_diff = {}
+					local stream = io.popen("echo status |" .. daemon.telnet)
+					for line in stream:lines() do
+						for key,value in string.gmatch(line, "([%w]+):[%s](.*)") do
+							daemon.status[key] = value
+						end
 					end
-				end
-				stream:close()
+					stream:close()
 
-				for key,field in ipairs(DAEMON_STATUS_KEYS) do
-					if daemon.status[field] ~= daemon.status_old[field] then
-						table.insert(daemon.status_diff, field)
+					for key,field in ipairs(DAEMON_STATUS_KEYS) do
+						if daemon.status[field] ~= daemon.status_old[field] then
+							table.insert(daemon.status_diff, field)
+						end
 					end
-				end
 
-				if #daemon.status_diff>0 then
-					WORKERS.timer.emit_signal("daemon_differs", daemon)	
+					if #daemon.status_diff>0 then
+						WORKERS.timer.emit_signal("daemon_differs", daemon)	
+					end
+					coroutine.yield()
 				end
 			end
 		))
@@ -227,7 +230,7 @@ function setup_workers()
 	for key,routine in ipairs(WORKERS) do
 		WORKERS.timer.add_signal("timeout", function () coroutine.resume(routine, DAEMONS[key]) end)
 	end
-	WORKERS.timer.add_signal("daemon_differs", diff_slot)
+	WORKERS.timer.add_signal("daemon_differs", function(daemon) diff_slot(daemon) end)
 end
 
 function exec(timeout)
