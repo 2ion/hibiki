@@ -38,7 +38,7 @@ end
 
 function retrieve_playlist(daemon_handle)
 	local coroutines = {}
-	for thread_handle=1,table.maxn(daemon_handle) do
+	for thread_handle=1,#daemon_handle do
 		table.insert(coroutines, coroutine.create(
 			function (daemon)
 				local position = 0
@@ -100,7 +100,7 @@ end
 
 function retrieve_daemon_status(daemon_handle)
 	local coroutines = {}
-	for counter=1,table.maxn(daemon_handle) do
+	for counter=1,#daemon_handle do
 		table.insert(coroutines, coroutine.create(
 			function (daemon)
 				daemon.status = {}
@@ -152,7 +152,7 @@ function playlist_menu_items(daemon_handle)
 	for key,value in ipairs(DAEMONS[daemon_handle].playlist) do
 		table.insert(items,
 			{
-				value.Pos .. "\t" .. value.Artist .. ": " .. value.Title,
+				awful.util.escape(value.Pos .. "\t" .. value.Artist .. ": " .. value.Title),
 				function() control_playback(daemon_handle, "play", value.Pos) end,
 				nil, --submenu table or function
 				nil --item icon				
@@ -169,10 +169,37 @@ function popup_playlist(daemon_handle)
 	awful.menu.show(awesome_menu, { keygrabber=true })
 end
 
-function create_workers()
+function diff_slot(daemon)
+	for key,field in ipairs(daemon.status_diff) do
+		if field == "volume" then true
+		elseif field == "repeat" then true
+		elseif field == "random" then true
+		elseif field == "single" then true
+		elseif field == "consume" then true
+		elseif field == "playlist" then true
+		elseif field == "playlistlength" then true
+		elseif field == "xfade" then true
+		elseif field == "mixrampdb" then true
+		elseif field == "mixrampdelay" then true
+		elseif field == "state" then true
+		elseif field == "song" then true
+		elseif field == "songid" then true
+		elseif field == "time" then true
+		elseif field == "elapsed" then true
+		elseif field == "bitrate" then true
+		elseif field == "audio" then true
+		elseif field == "nextsong" then true
+		elseif field == "nextsongid" then true
+		end
+	end
+
+end
+
+function setup_workers()
+	WORKERS.timer = awful.timer
 	for X=1,#DAEMONS do
 		table.insert(WORKERS, coroutine.create(
-			function (daemon, daemon_handle, timer)
+			function (daemon)
 				daemon.status_old = awful.table.clone(daemon.status)
 				daemon.status = {}
 				daemon.status_diff = {}
@@ -191,11 +218,27 @@ function create_workers()
 				end
 
 				if #daemon.status_diff>0 then
-					timer.emit_signal("daemon_status_changed", daemon)	
+					WORKERS.timer.emit_signal("daemon_differs", daemon)	
 				end
 			end
 		))
 	end
+
+	for key,routine in ipairs(WORKERS) do
+		WORKERS.timer.add_signal("timeout", function () coroutine.resume(routine, DAEMONS[key]) end)
+	end
+	WORKERS.timer.add_signal("daemon_differs", diff_slot)
+end
+
+function exec(timeout)
+	WORKERS.timer.timeout = timeout and timeout or 0.5
+	WORKERS.timer.start()
+	return WORKERS.timer.timeout
+end
+
+function stop()
+	WORKERS.timer.stop()
+	return WORKERS.timer.started
 end
 
 function init(servers)
@@ -222,3 +265,4 @@ function init(servers)
 		return nil
 	end
 end
+
