@@ -152,7 +152,7 @@ function playlist_menu_items(daemon_handle)
 	for key,value in ipairs(DAEMONS[daemon_handle].playlist) do
 		table.insert(items,
 			{
-				awful.util.escape(value.Pos .. "\t" .. value.Artist .. ": " .. value.Title),
+				value.Pos .. "\t" .. value.Artist .. ": " .. value.Title,
 				function() control_playback(daemon_handle, "play", value.Pos) end,
 				nil, --submenu table or function
 				nil --item icon				
