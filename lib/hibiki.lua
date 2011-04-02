@@ -30,6 +30,10 @@ local DAEMON_STATUS_KEYS = {}
 FLAGS = {
 	ready=false
 }
+local STYLE = {
+	title = { open='<span font_desc="DejaVu Sans 12" color="#aaaaaa">', close='</span>' },
+	body  = { open='<span font_desc="DejaVu Sans 10" color "#aaaaaa">', close='</span>' }
+}
 -- }}}
 
 local function dbg_notify(text)
@@ -196,12 +200,25 @@ function setup_workers()
 			end
 		)
 
+		DAEMONS[X].notify_current_song = coroutine.create(
+			function (daemon)
+				while true do
+					local song = daemon.playlist[tonumber(daemon.status["song"])]
+					naughty.notify({
+						text = '<span font_desc="'
+					})
+					coroutine.yield()
+				end
+			end
+		)
+
 		table.insert(WORKERS, coroutine.create(
 			function (daemon)
 				while true do
 					daemon.status_old = awful.table.clone(daemon.status)
 					daemon.status = {}
 					daemon.status_diff = {}
+
 					local stream = io.popen("echo status |" .. daemon.telnet)
 					for line in stream:lines() do
 						for key,value in string.gmatch(line, "([%w]+):[%s](.*)") do
@@ -213,6 +230,9 @@ function setup_workers()
 					for key,field in ipairs(DAEMON_STATUS_KEYS) do
 						if daemon.status[field] ~= daemon.status_old[field] then
 							table.insert(daemon.status_diff, field)
+							if field == "playlist" then
+								table.insert(daemon.status_diff, "songid")
+							end
 						end
 					end
 
@@ -223,14 +243,16 @@ function setup_workers()
 						elseif field == "single" then break
 						elseif field == "consume" then break
 						elseif field == "playlist" then	--playlist version number differs
-							daemon.retrieve_playlist(daemon)
+							coroutine.resume(daemon.retrieve_playlist, daemon)
 						elseif field == "playlistlength" then break
 						elseif field == "xfade" then break
 						elseif field == "mixrampdb" then break
 						elseif field == "mixrampdelay" then break
 						elseif field == "state" then break
 						elseif field == "song" then break
-						elseif field == "songid" then break
+						elseif field == "songid" then
+							
+							
 						elseif field == "time" then break
 						elseif field == "elapsed" then break
 						elseif field == "bitrate" then break
@@ -248,6 +270,7 @@ function setup_workers()
 
 	for key,routine in ipairs(WORKERS) do
 		WORKERS.timer.add_signal("timeout", function () coroutine.resume(routine, DAEMONS[key]) end)
+		DAEMONS[key].timer = WORKERS.timer
 	end
 end
 
