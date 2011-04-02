@@ -32,7 +32,8 @@ FLAGS = {
 }
 local STYLE = {
 	title = { open='<span font_desc="DejaVu Sans 12" color="#aaaaaa">', close='</span>' },
-	body  = { open='<span font_desc="DejaVu Sans 10" color "#aaaaaa">', close='</span>' }
+	body  = { open='<span font_desc="DejaVu Sans 10" color "#aaaaaa">', close='</span>' },
+	timeout = 3
 }
 -- }}}
 
@@ -205,7 +206,9 @@ function setup_workers()
 				while true do
 					local song = daemon.playlist[tonumber(daemon.status["song"])]
 					naughty.notify({
-						text = '<span font_desc="'
+						text = 	STYLE.title.open .. song.Title .. STYLE.title.close ..
+								STYLE.body.open .. song.Album .. ' (' .. song.Date .. ')<br>' .. song.Artist .. STYLE.body.close,
+						timeout = STYLE.timeout
 					})
 					coroutine.yield()
 				end
