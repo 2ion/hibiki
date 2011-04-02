@@ -169,35 +169,33 @@ function popup_playlist(daemon_handle)
 	awful.menu.show(awesome_menu, { keygrabber=true })
 end
 
-function diff_slot(daemon)
-	for key,field in ipairs(daemon.status_diff) do
-		if field == "volume" then break
-		elseif field == "repeat" then break
-		elseif field == "random" then break
-		elseif field == "single" then break
-		elseif field == "consume" then break
-		elseif field == "playlist" then break
-		elseif field == "playlistlength" then break
-		elseif field == "xfade" then break
-		elseif field == "mixrampdb" then break
-		elseif field == "mixrampdelay" then break
-		elseif field == "state" then break
-		elseif field == "song" then break
-		elseif field == "songid" then break
-		elseif field == "time" then break
-		elseif field == "elapsed" then break
-		elseif field == "bitrate" then break
-		elseif field == "audio" then break
-		elseif field == "nextsong" then break
-		elseif field == "nextsongid" then break
-		end
-	end
-
-end
 
 function setup_workers()
 	WORKERS.timer = awful.timer
+
 	for X=1,#DAEMONS do
+		DAEMONS[X].retrieve_playlist = coroutine.create(
+			function (daemon)
+				while true do
+					local position = 0
+					local stream = io.popen("echo playlistinfo |" .. daemon.telnet)
+					daemon.playlist = {}
+					for line in stream:lines() do
+						for key,value in string.gmatch(line, "([%w]+):[%s](.*)") do
+							if key=="file" then
+								position = position + 1
+								daemon.playlist[position] = { pos=position, file=value }
+							else daemon.playlist[position][key] = value
+							end
+						end
+					end
+					stream:close()
+					daemon.playlist.last = position
+					coroutine.yield()
+				end
+			end
+		)
+
 		table.insert(WORKERS, coroutine.create(
 			function (daemon)
 				while true do
@@ -218,9 +216,30 @@ function setup_workers()
 						end
 					end
 
-					if #daemon.status_diff>0 then
-						WORKERS.timer.emit_signal("daemon_differs", daemon)	
+					for key,field in ipairs(daemon.status_diff) do
+						if field == "volume" then break
+						elseif field == "repeat" then break
+						elseif field == "random" then break
+						elseif field == "single" then break
+						elseif field == "consume" then break
+						elseif field == "playlist" then	--playlist version number differs
+							daemon.retrieve_playlist(daemon)
+						elseif field == "playlistlength" then break
+						elseif field == "xfade" then break
+						elseif field == "mixrampdb" then break
+						elseif field == "mixrampdelay" then break
+						elseif field == "state" then break
+						elseif field == "song" then break
+						elseif field == "songid" then break
+						elseif field == "time" then break
+						elseif field == "elapsed" then break
+						elseif field == "bitrate" then break
+						elseif field == "audio" then break
+						elseif field == "nextsong" then break
+						elseif field == "nextsongid" then break
+						end
 					end
+
 					coroutine.yield()
 				end
 			end
@@ -230,7 +249,6 @@ function setup_workers()
 	for key,routine in ipairs(WORKERS) do
 		WORKERS.timer.add_signal("timeout", function () coroutine.resume(routine, DAEMONS[key]) end)
 	end
-	WORKERS.timer.add_signal("daemon_differs", function(daemon) diff_slot(daemon) end)
 end
 
 function exec(timeout)
