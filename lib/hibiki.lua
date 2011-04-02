@@ -19,6 +19,7 @@ local ipairs = ipairs
 local tonumber = tonumber
 local tostring = tostring
 local awful = require("awful")
+local timer = timer
 local naughty = require("naughty")
 module("hibiki")
 -- }}}
@@ -170,16 +171,16 @@ function popup_playlist(daemon_handle)
 	retrieve_playlist({daemon_handle})
 	local menu_items = playlist_menu_items(daemon_handle)
 	local menu = { items=menu_items, width=350, height=20}
-	local awesome_menu = awful.menu.new(menu)
+	local awesome_menu = awful.menu.new(MENU)
 	awful.menu.show(awesome_menu, { keygrabber=true })
 end
 
 
 function setup_workers()
-	WORKERS.timer = awful.timer
+	--WORKERS.timer = awful.timer
 
 	for X=1,#DAEMONS do
-		DAEMONS[X].retrieve_playlist = coroutine.create(
+		DAEMONS[X].retrieve_playlist = coroutine.wrap(
 			function (daemon)
 				while true do
 					local position = 0
@@ -201,21 +202,40 @@ function setup_workers()
 			end
 		)
 
-		DAEMONS[X].notify_current_song = coroutine.create(
+		DAEMONS[X].notify_current_song = coroutine.wrap(
 			function (daemon)
 				while true do
 					local song = daemon.playlist[tonumber(daemon.status["song"])]
-					naughty.notify({
-						text = 	STYLE.title.open .. song.Title .. STYLE.title.close ..
-								STYLE.body.open .. song.Album .. ' (' .. song.Date .. ')<br>' .. song.Artist .. STYLE.body.close,
-						timeout = STYLE.timeout
-					})
-					coroutine.yield()
+					local text = 	STYLE.title.open..
+									song.Title..
+									STYLE.title.close..
+									STYLE.body.open..
+									song.Album..
+									' ('..
+									song.Date..
+									')<br>'..
+									song.Artist..
+									STYLE.body.close
+					coroutine.yield(text)
 				end
 			end
 		)
 
-		table.insert(WORKERS, coroutine.create(
+		DAEMONS[X].notify_state = coroutine.wrap(
+			function (daemon)
+				while true do
+					if daemon.status.state == "stop" then
+						coroutine.yield("Stopped.")
+					elseif daemon.status.state == "play" then
+						coroutine.yield("Playing.")
+					elseif daemon.status.state == "pause" then
+						coroutine.yield("Paused.")
+					end
+				end
+			end
+		)
+
+		table.insert(WORKERS, coroutine.wrap(
 			function (daemon)
 				while true do
 					daemon.status_old = awful.table.clone(daemon.status)
@@ -246,16 +266,16 @@ function setup_workers()
 						elseif field == "single" then break
 						elseif field == "consume" then break
 						elseif field == "playlist" then	--playlist version number differs
-							coroutine.resume(daemon.retrieve_playlist, daemon)
+							daemon.retrieve_playlist(daemon)
 						elseif field == "playlistlength" then break
 						elseif field == "xfade" then break
 						elseif field == "mixrampdb" then break
 						elseif field == "mixrampdelay" then break
-						elseif field == "state" then break
+						elseif field == "state" then
+							naughty.notify({ text=daemon.notify_state(daemon) })
 						elseif field == "song" then break
 						elseif field == "songid" then
-							
-							
+							naughty.notify({ text=daemon.notify_current_song(daemon) })
 						elseif field == "time" then break
 						elseif field == "elapsed" then break
 						elseif field == "bitrate" then break
@@ -271,20 +291,25 @@ function setup_workers()
 		))
 	end
 
-	for key,routine in ipairs(WORKERS) do
-		WORKERS.timer.add_signal("timeout", function () coroutine.resume(routine, DAEMONS[key]) end)
-		DAEMONS[key].timer = WORKERS.timer
-	end
+	WORKERS.timer:add_signal("timeout",
+		function()
+			for key,routine in ipairs(WORKERS) do
+				routine(DAEMONS[key])
+			end
+		end
+	)
 end
 
 function exec(timeout)
-	WORKERS.timer.timeout = timeout and timeout or 0.5
-	WORKERS.timer.start()
-	return WORKERS.timer.timeout
+	WORKERS.timer = timer({ timeout=timeout })
+	setup_workers()
+	WORKERS.timer:start()
+	WORKERS.timer:emit_signal("timeout")
+	return true
 end
 
 function stop()
-	WORKERS.timer.stop()
+	timer.stop()
 	return WORKERS.timer.started
 end
 
@@ -300,10 +325,11 @@ function init(servers)
     end
     for key, daemon in ipairs(DAEMONS) do
         if daemon.password then
---            daemon.telnet="curl -fsm1 telnet://" .. daemon.password .. "@" .. daemon.host .. ":" .. daemon.port
-			daemon.telnet="netcat " .. daemon.host .. " " .. daemon.port
+            daemon.telnet="curl -fsm1 telnet://" .. daemon.password .. "@" .. daemon.host .. ":" .. daemon.port
+--			daemon.telnet="netcat " .. daemon.host .. " " .. daemon.port
         else
-            daemon.telnet="netcat " .. daemon.host .. " " .. daemon.port
+	    daemon.telnet="curl -fsm1 telnet://" .. daemon.host .. ":" .. daemon.port
+--            daemon.telnet="netcat " .. daemon.host .. " " .. daemon.port
         end
     end
 	if #DAEMONS>0 then	
