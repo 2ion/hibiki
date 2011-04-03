@@ -40,6 +40,8 @@ module("hibiki")
 --}}}
 
 local DAEMONS = {}
+local TIMER = nil
+local WORKERS = {}
 
 local function table_setfenv(table,envt)
 	for key,value in pairs(table) do
@@ -95,7 +97,7 @@ local function register_daemon(daemon_table)
 			local first = true
 			for key,lied in ipairs(playlist.items) do
 				if first then
-					text = lied.Pos .. "\t " .. lied.Artist .. ": " .. lied.Title
+					text = lied.Pos .. "\t" .. lied.Artist .. ": " .. lied.Title
 					first = false
 				else
 					text = text .. "\n" .. lied.Pos .. " - " .. lied.Artist .. ": " ..
@@ -107,6 +109,26 @@ local function register_daemon(daemon_table)
 			noteconf.timeout = 5
 			naughty.notify(noteconf)
 		end
+	mpd.notify.state = 
+		function ()
+			local text = ""
+			local title = ""
+			if mpd.status.new.state == "play" then
+				local lied = mpd.playlist.items[tonumber(mpd.status.new.song)]
+				title = "Playing"
+				text = lied.Pos .. "\t" .. lied.Artist .. ": " .. lied.Title
+			elseif mpd.status.new.state == "stop" then
+				title = "Stopped"
+			elseif mpd.status.new.state == "pause" then
+				local lied = mpd.playlist.items[tonumber(mpd.status.new.song)]
+				title = "Paused"
+				text = lied.Pos .. "\t" .. lied.Artist .. ": " .. lied.Title
+			end
+			local noteconf = notify.conf
+			noteconf.text = text
+			noteconf.title = title
+			naughty.notify(noteconf)
+		end
 	
 	mpd.ui = {}
 	mpd.ui.playlistmenu = 
@@ -116,6 +138,7 @@ local function register_daemon(daemon_table)
 				table.insert(menu_items, {
 					lied.Pos .. "\t" .. lied.Artist .. ": " .. lied.Title,
 					function ()
+						playback.Play(lied.Pos)
 					end,
 					nil, -- submenu table or function
 					nil -- icon
@@ -143,19 +166,23 @@ local function register_daemon(daemon_table)
 			for line in stream:lines() do
 				for key,value in string.gmatch(line, "([%w]+):[%s](.*)") do
 					status.new[key] = value
-					if status.old[key] and status.old[key] ~= status.new[key] then
-						if 		key == "volume" then break
+					if status.new[key]~=status.old[key] then
+						if 	key == "volume" then break
 						elseif 	key == "repeat" then break
 						elseif	key == "random" then break
 						elseif	key == "single" then break
 						elseif	key == "consume" then break
-						elseif	key == "playlist" then break
+						elseif	key == "playlist" then
+							playlist.read()					
+							notify.playlist()
 						elseif	key == "playlistlength" then break
 						elseif	key == "xfade" then break
 						elseif	key == "mixrampdb" then break
 						elseif	key == "mixrampdelay" then break
-						elseif	key == "state" then break
-						elseif	key == "song" then break
+						elseif	key == "state" then
+							notify.state()
+						elseif	key == "song" then
+							notify.state()
 						elseif	key == "songid" then break
 						elseif	key == "time" then break
 						elseif	key == "elapsed" then break
@@ -249,36 +276,32 @@ local function register_daemon(daemon_table)
 			playback.control("stop")
 		end
 	
-	
 	table_setfenv(mpd,mpd)
 	table.insert(DAEMONS, mpd)
 end
 
-function init(mpds)
+
+function exec()
+	TIMER:start()
+	TIMER:emit_signal("timeout")
+end
+
+function unexec()
+	TIMER:stop()
+end
+
+function serial()
+	for key,daemon in ipairs(DAEMONS) do
+		daemon.status.diff()
+	end
+end
+
+function init(mpds, timeout)
 	for key,daemon_table in ipairs(mpds) do
 		register_daemon(daemon_table)
 	end
-	DAEMONS[1].playlist.read()
-	DAEMONS[1].ui.playlistmenu()
-end
+	TIMER = timer({ timeout = timeout and timeout or 3 })
+	TIMER:add_signal("timeout", serial)	
 
---[[
-register_daemon({})
-local stream = DAEMONS[1].read_reply("playlist")
-for line in stream:lines() do
-	print(line)
 end
-DAEMONS[1].playback.Next()
-DAEMONS[1].playlist.read()
-for key,value in ipairs(DAEMONS[1].playlist.items) do
-	print(value.Title)
-end
-DAEMONS[1].status.diff()
-for key,value in pairs(DAEMONS[1].status.new) do
-	print(key,value)
-end
-DAEMONS[1].status.diff()
-DAEMONS[1].notify.playlist()
-print(DAEMONS[1].notify.conf.title)
---]]
 
