@@ -66,7 +66,12 @@ local function register_daemon(daemon_table)
 		end
 	mpd.toggle = 
 		function (command, boolean)
-			local stream = read_reply(command .. (boolean and "1" or "0"))
+			local stream = read_reply(command .. (boolean and " 1" or " 0"))
+			stream:close()
+		end
+	mpd.set = 
+		function (option, value)
+			local stream = read_reply(command .. " " .. value)
 			stream:close()
 		end
 
@@ -112,6 +117,10 @@ local function register_daemon(daemon_table)
 	mpd.playback.Repeat = 
 		function (boolean)
 			toggle("repeat", boolean)
+		end
+	mpd.playback.Single = 
+		function (boolean)
+			toggle("single", boolean)
 		end
 	mpd.playback.Play =
 		function (position)
