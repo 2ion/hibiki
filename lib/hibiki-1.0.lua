@@ -34,8 +34,8 @@ local ipairs = ipairs
 local tonumber = tonumber
 local tostring = tostring
 local timer = timer
---local awful = require("awful")
---local naughty = require("naughty")
+local awful = require("awful")
+local naughty = require("naughty")
 module("hibiki")
 --}}}
 
@@ -49,6 +49,14 @@ local function table_setfenv(table,envt)
 			table_setfenv(value, envt)
 		end
 	end
+end
+
+local function table_clone(table)
+	local t = {}
+	for key,value in pairs(table) do
+		t[key] = value
+	end
+	return t
 end
 
 local function register_daemon(daemon_table)
@@ -74,13 +82,99 @@ local function register_daemon(daemon_table)
 			local stream = read_reply(command .. " " .. value)
 			stream:close()
 		end
+	
+	mpd.notify = {}
+	mpd.notify.conf = daemon_table.noteconf and daemon_table.noteconf or
+		{
+			title = "mpd@" .. mpd.host .. ":" .. mpd.port,
+			timeout = 3
+		}
+	mpd.notify.playlist = 
+		function ()
+			local text = ""
+			local first = true
+			for key,lied in ipairs(playlist.items) do
+				if first then
+					text = lied.Pos .. "\t " .. lied.Artist .. ": " .. lied.Title
+					first = false
+				else
+					text = text .. "\n" .. lied.Pos .. " - " .. lied.Artist .. ": " ..
+						lied.Title
+				end
+			end
+			local noteconf = notify.conf
+			noteconf.text = text
+			noteconf.timeout = 5
+			naughty.notify(noteconf)
+		end
+	
+	mpd.ui = {}
+	mpd.ui.playlistmenu = 
+		function ()
+			local menu_items = {}
+			for key,lied in ipairs(playlist.items) do
+				table.insert(menu_items, {
+					lied.Pos .. "\t" .. lied.Artist .. ": " .. lied.Title,
+					function ()
+					end,
+					nil, -- submenu table or function
+					nil -- icon
+				})
+			end
+			local awe_menu = awful.menu.new({
+				items = menu_items,
+				width = 350,
+				height = 20
+			})
+			awful.menu.show(awe_menu, { keygrabber = true })
+		end
+
+	mpd.status = {}
+	mpd.status.diff = 
+		function ()
+			if status.new then
+				status.old = table_clone(status.new)
+			else
+				status.old = {}
+			end
+			status.new = {}
+			local stream = read_reply("status")
+
+			for line in stream:lines() do
+				for key,value in string.gmatch(line, "([%w]+):[%s](.*)") do
+					status.new[key] = value
+					if status.old[key] and status.old[key] ~= status.new[key] then
+						if 		key == "volume" then break
+						elseif 	key == "repeat" then break
+						elseif	key == "random" then break
+						elseif	key == "single" then break
+						elseif	key == "consume" then break
+						elseif	key == "playlist" then break
+						elseif	key == "playlistlength" then break
+						elseif	key == "xfade" then break
+						elseif	key == "mixrampdb" then break
+						elseif	key == "mixrampdelay" then break
+						elseif	key == "state" then break
+						elseif	key == "song" then break
+						elseif	key == "songid" then break
+						elseif	key == "time" then break
+						elseif	key == "elapsed" then break
+						elseif	key == "bitrate" then break
+						elseif	key == "audio" then break
+						elseif	key == "nextsong" then break
+						elseif	key == "nextsongid" then break
+						end
+					end
+				end
+			end
+			stream:close()	
+		end
 
 	mpd.playlist = {}
 	mpd.playlist.read = 
 		function ()
 			playlist.items = {}
 			local lied = nil
-			local position = 0
 			local stream = read_reply("playlistinfo")
 			for line in stream:lines() do
 				for key,value in string.gmatch(line, "([%w]+):[%s](.*)") do
@@ -105,6 +199,18 @@ local function register_daemon(daemon_table)
 				stream = read_reply(command)
 			end
 			stream:close()
+		end
+	mpd.playback.Volume = 
+		function (percent)
+			set("setvol", percend and percent or 0)
+		end
+	mpd.playback.Crossfade = 
+		function (seconds)
+			set("crossfade", seconds and seconds or 0)
+		end
+	mpd.playback.ReplayGain = 
+		function (mode)
+			set("replay_gain_mode", mode and mode or "off")
 		end
 	mpd.playback.Consume = 
 		function (boolean)
@@ -148,6 +254,15 @@ local function register_daemon(daemon_table)
 	table.insert(DAEMONS, mpd)
 end
 
+function init(mpds)
+	for key,daemon_table in ipairs(mpds) do
+		register_daemon(daemon_table)
+	end
+	DAEMONS[1].playlist.read()
+	DAEMONS[1].ui.playlistmenu()
+end
+
+--[[
 register_daemon({})
 local stream = DAEMONS[1].read_reply("playlist")
 for line in stream:lines() do
@@ -158,6 +273,12 @@ DAEMONS[1].playlist.read()
 for key,value in ipairs(DAEMONS[1].playlist.items) do
 	print(value.Title)
 end
-	
-
+DAEMONS[1].status.diff()
+for key,value in pairs(DAEMONS[1].status.new) do
+	print(key,value)
+end
+DAEMONS[1].status.diff()
+DAEMONS[1].notify.playlist()
+print(DAEMONS[1].notify.conf.title)
+--]]
 
