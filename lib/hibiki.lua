@@ -325,11 +325,11 @@ function init(servers)
     end
     for key, daemon in ipairs(DAEMONS) do
         if daemon.password then
-            daemon.telnet="curl -fsm1 telnet://" .. daemon.password .. "@" .. daemon.host .. ":" .. daemon.port
---			daemon.telnet="netcat " .. daemon.host .. " " .. daemon.port
+--            daemon.telnet="curl -fsm1 telnet://" .. daemon.password .. "@" .. daemon.host .. ":" .. daemon.port
+	    	daemon.telnet="netcat " .. daemon.host .. " " .. daemon.port
         else
-	    daemon.telnet="curl -fsm1 telnet://" .. daemon.host .. ":" .. daemon.port
---            daemon.telnet="netcat " .. daemon.host .. " " .. daemon.port
+--	    daemon.telnet="curl -fsm1 telnet://" .. daemon.host .. ":" .. daemon.port
+            	daemon.telnet="netcat " .. daemon.host .. " " .. daemon.port
         end
     end
 	if #DAEMONS>0 then	
