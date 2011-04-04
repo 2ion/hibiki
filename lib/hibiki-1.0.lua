@@ -19,6 +19,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 	The sourcecode is obtainable through https://github.com/2ion/hibiki.
+	TODO: -escape naughty notifications
 --]]
 
 --{{{ module environment
@@ -97,10 +98,10 @@ local function register_daemon(daemon_table)
 			local first = true
 			for key,lied in ipairs(playlist.items) do
 				if first then
-					text = lied.Pos .. "\t" .. lied.Artist .. ": " .. lied.Title
+					text = lied.Pos .. "\t" .. lied.Artist .. " ~ " .. lied.Title
 					first = false
 				else
-					text = text .. "\n" .. lied.Pos .. " - " .. lied.Artist .. ": " ..
+					text = text .. "\n" .. lied.Pos .. "\t" .. lied.Artist .. " ~ " ..
 						lied.Title
 				end
 			end
@@ -111,18 +112,16 @@ local function register_daemon(daemon_table)
 		end
 	mpd.notify.state = 
 		function ()
-			local text = ""
+			local lied = mpd.playlist.items[tonumber(mpd.status.new.song)+1]
+			local text = lied.Pos .. "  <span font_desc=\"DejaVu Sans 13\">"..lied.Title.."</span>".."<span font_desc=\"DejaVu Sans 11\"><br>" .. 
+				lied.Album.." ("..lied.Date..")\n"..lied.Artist .. "</span>"
 			local title = ""
 			if mpd.status.new.state == "play" then
-				local lied = mpd.playlist.items[tonumber(mpd.status.new.song)]
 				title = "Playing"
-				text = lied.Pos .. "\t" .. lied.Artist .. ": " .. lied.Title
 			elseif mpd.status.new.state == "stop" then
-				title = "Stopped"
+				title = "Stopped at"
 			elseif mpd.status.new.state == "pause" then
-				local lied = mpd.playlist.items[tonumber(mpd.status.new.song)]
-				title = "Paused"
-				text = lied.Pos .. "\t" .. lied.Artist .. ": " .. lied.Title
+				title = "Paused at"
 			end
 			local noteconf = notify.conf
 			noteconf.text = text
@@ -134,9 +133,9 @@ local function register_daemon(daemon_table)
 	mpd.ui.playlistmenu = 
 		function ()
 			local menu_items = {}
-			for key,lied in ipairs(playlist.items) do
+			for key,lied in pairs(playlist.items) do
 				table.insert(menu_items, {
-					lied.Pos .. "\t" .. lied.Artist .. ": " .. lied.Title,
+					lied.Pos .. "\t" .. lied.Artist .. " ~ " .. lied.Title,
 					function ()
 						playback.Play(lied.Pos)
 					end,
@@ -162,18 +161,20 @@ local function register_daemon(daemon_table)
 			end
 			status.new = {}
 			local stream = read_reply("status")
+			status.noneq = {}
 
 			for line in stream:lines() do
 				for key,value in string.gmatch(line, "([%w]+):[%s](.*)") do
 					status.new[key] = value
 					if status.new[key]~=status.old[key] then
+						table.insert(status.noneq, key)
 						if 	key == "volume" then break
 						elseif 	key == "repeat" then break
 						elseif	key == "random" then break
 						elseif	key == "single" then break
 						elseif	key == "consume" then break
 						elseif	key == "playlist" then
-							playlist.read()					
+							playlist.read()
 							notify.playlist()
 						elseif	key == "playlistlength" then break
 						elseif	key == "xfade" then break
@@ -194,22 +195,33 @@ local function register_daemon(daemon_table)
 					end
 				end
 			end
-			stream:close()	
+			stream:close()
 		end
 
 	mpd.playlist = {}
 	mpd.playlist.read = 
 		function ()
 			playlist.items = {}
-			local lied = nil
+			local index = 0
 			local stream = read_reply("playlistinfo")
 			for line in stream:lines() do
+				--[[
 				for key,value in string.gmatch(line, "([%w]+):[%s](.*)") do
 					if key == "file" then
 						if lied then table.insert(playlist.items, lied) end
 						lied = {}
-					else
 						lied[key] = value
+					elseif lied then
+						lied[key] = value
+					end
+				end
+				--]]
+				for key,value in string.gmatch(line, "([%w]+):[%s](.*)") do
+					if key == "file" then
+						index = index + 1
+						playlist.items[index] = { file = value }
+					else
+						playlist.items[index][key] = value
 					end
 				end
 			end
@@ -300,8 +312,13 @@ function init(mpds, timeout)
 	for key,daemon_table in ipairs(mpds) do
 		register_daemon(daemon_table)
 	end
-	TIMER = timer({ timeout = timeout and timeout or 3 })
+	TIMER = timer({ timeout = timeout and timeout or 0.5 })
 	TIMER:add_signal("timeout", serial)	
 
+end
+
+function daemons()
+	local daemons = DAEMONS
+	return daemons
 end
 
