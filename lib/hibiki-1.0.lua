@@ -19,7 +19,8 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 	The sourcecode is obtainable through https://github.com/2ion/hibiki.
-	TODO: -escape naughty notifications
+	TODO: escape naughty notifications
+	TODO: implement operations on playlist
 --]]
 
 --{{{ module environment
@@ -84,6 +85,25 @@ local function register_daemon(daemon_table)
 		function (option, value)
 			local stream = read_reply(command .. " " .. value)
 			stream:close()
+		end
+	mpd.command = 
+		function (command, args, isRange)
+			local command = command
+			if args then
+				if isRange then
+					command = command .. " " .. args[1] .. ":" .. args[2]
+					for X=3,#args do
+						command = command .. " " .. args[X]				
+					end
+				else
+					for key,arg in ipairs(args) do
+						command = command .. " " .. arg
+					end
+				end
+			end
+			local stream = read_reply(command)
+			stream:close()
+			return command
 		end
 	
 	mpd.notify = {}
@@ -205,17 +225,6 @@ local function register_daemon(daemon_table)
 			local index = 0
 			local stream = read_reply("playlistinfo")
 			for line in stream:lines() do
-				--[[
-				for key,value in string.gmatch(line, "([%w]+):[%s](.*)") do
-					if key == "file" then
-						if lied then table.insert(playlist.items, lied) end
-						lied = {}
-						lied[key] = value
-					elseif lied then
-						lied[key] = value
-					end
-				end
-				--]]
 				for key,value in string.gmatch(line, "([%w]+):[%s](.*)") do
 					if key == "file" then
 						index = index + 1
@@ -227,6 +236,35 @@ local function register_daemon(daemon_table)
 			end
 			stream:close()
 		end
+	mpd.playlist.shuffle = 
+		function (pos1, pos2)
+			if pos1 and pos2 then
+				command("shuffle", {pos1,pos2}, true)
+			else
+				command("shuffle")
+			end
+		end
+	mpd.playlist.swap = 
+		function (pos1, pos2)
+			command("swap", {pos1,pos2})
+		end
+	mpd.playlist.move = 
+		function (pos1, pos2, pos3)
+			if pos3 then
+				command("move", {pos1,pos2,pos3}, true)
+			else
+				command("move", {pos1,pos2})
+			end
+		end
+	mpd.playlist.delete = 
+		function (pos1, pos2)
+			if pos2 then
+				command("delete", {pos1,pos2}, true)
+			else
+				command("delete", {pos1})
+			end
+		end
+
 	
 	mpd.playback = {}
 	mpd.playback.control = 
