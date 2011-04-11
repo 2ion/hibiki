@@ -38,12 +38,20 @@ local tostring = tostring
 local timer = timer
 local awful = require("awful")
 local naughty = require("naughty")
+local utf8 = require("utf8")
 module("hibiki")
 --}}}
 
 local DAEMONS = {}
 local TIMER = nil
 local WORKERS = {}
+local UTF8_ESCAPES = {}
+UTF8_ESCAPES["&"] = "&amp;"
+UTF8_ESCAPES["/"] = "&#47;"
+UTF8_ESCAPES["<"] = "&lt;"
+UTF8_ESCAPES[">"] = "&gt;"
+UTF8_ESCAPES["\""] = "&quot;"
+UTF8_ESCAPES["'"] = "&apos;"
 
 local function table_setfenv(table,envt)
 	for key,value in pairs(table) do
@@ -105,6 +113,10 @@ local function register_daemon(daemon_table)
 			stream:close()
 			return command
 		end
+	mpd.escape = 
+		function (string)
+			return utf8.replace(string, UTF8_ESCAPES)
+		end
 	
 	mpd.notify = {}
 	mpd.notify.conf = daemon_table.noteconf and daemon_table.noteconf or
@@ -158,9 +170,7 @@ local function register_daemon(daemon_table)
 					lied.Pos .. "\t" .. lied.Artist .. " ~ " .. lied.Title,
 					function ()
 						playback.Play(lied.Pos)
-					end,
-					nil, -- submenu table or function
-					nil -- icon
+					end
 				})
 			end
 			local awe_menu = awful.menu.new({
@@ -169,6 +179,40 @@ local function register_daemon(daemon_table)
 				height = 20
 			})
 			awful.menu.show(awe_menu, { keygrabber = true })
+		end
+	mpd.ui.playlist_submenu = 
+		function (pos)
+			local smenu_items = {}
+			table.insert(smenu_items, {
+				"Swap with",
+				ui.playlist_swapmenu(pos)
+			})
+			local awe_smenu = awful.menu.new({
+				items = smenu_items,
+				width = 350,
+				height = 20
+			})
+			return awful.menu({ items=smenu_items })
+		end
+	mpd.ui.playlist_swapmenu = 
+		function (pos1)
+			local swapmenu_items = {}
+			for key,lied in pairs(playlist.items) do
+				table.insert(swapmenu_items, {
+					lied.Pos .. "\t" .. lied.Artist .. " ~ " .. lied.Title,
+					function ()
+						playlist.swap(pos1, lied.Pos)
+					end,
+					nil,
+					nil
+				})
+			end
+			local awe_swapmenu = awful.menu.new({
+				items = swapmenu_items,
+				width = 350,
+				height = 20
+			})
+			return awe_swapmenu
 		end
 
 	mpd.status = {}
@@ -360,3 +404,4 @@ function daemons()
 	return daemons
 end
 
+-- vim: tabstop=4
