@@ -38,6 +38,7 @@ local timer = timer
 local awful = require("awful")
 local naughty = require("naughty")
 local vhelpers = require("vicious.helpers")
+local capi = { mouse = mouse }
 module("hibiki")
 --}}}
 
@@ -207,33 +208,37 @@ local function register_daemon(daemon_table)
 			end
 
 			for P=1,#ui.playlistmenu_chunks do
-				ui.playlistmenu_chunks[tostring(P)] = awful.menu.new({
-					items = ui.playlistmenu_chunks[P],
-					width = 350,
-					height = 20
-				})
-				if ui.playlistmenu_chunks[P-1] then
-					table.insert(ui.playlistmenu_chunks[P], { "↑",
-						function ()
-							awful.menu.show(ui.playlistmenu_chunks[tostring(P-1)], {
-								keygrabber = true
-							})
-						end
-					})
-				end
+				ui.playlistmenu_chunks[tostring(P)] = 
+					function ()
+						awful.menu.show(
+							awful.menu.new({
+								items = ui.playlistmenu_chunks[P],
+								width = 350,
+								height = 20
+							}),
+							{ keygrabber = true, coords = ui.playlistmenu_chunks.coords }
+						)
+					end
+			end
+
+			for P=1,#ui.playlistmenu_chunks do
 				if ui.playlistmenu_chunks[P+1] then
-					table.insert(ui.playlistmenu_chunks[P], { "↓",
-						function ()
-							awful.menu.show(ui.playlistmenu_chunks[tostring(P+1)], {
-								keygrabber = true
-							})
-						end
+					table.insert(ui.playlistmenu_chunks[P], {
+						"-->",
+						function () ui.playlistmenu_chunks[tostring(P+1)]() end
+					})
+				end
+				
+				if ui.playlistmenu_chunks[P-1] then
+					table.insert(ui.playlistmenu_chunks[P], 1, {
+						"<--",
+						function () ui.playlistmenu_chunks[tostring(P-1)]() end
 					})
 				end
 			end
-			if ui.playlistmenu_chunks[1] then
-				awful.menu.show(ui.playlistmenu[1], { keygrabber=true })
-			end
+			
+			ui.playlistmenu_chunks.coords = capi.mouse.coords()
+			if ui.playlistmenu_chunks["1"] then ui.playlistmenu_chunks["1"]() end
 		end
 
 	mpd.ui.playlist_submenu = 
