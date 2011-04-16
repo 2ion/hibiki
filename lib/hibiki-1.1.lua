@@ -22,6 +22,7 @@
 --]]
 
 --{{{ module environment
+local math = math
 local io = io
 local coroutine = coroutine
 local string = string
@@ -176,25 +177,65 @@ local function register_daemon(daemon_table)
 		end
 	
 	mpd.ui = {}
-	mpd.ui.playlistmenu = 
-		function ()
-			ui.playlistmenu_items = {}
-				for key,lied in pairs(playlist.items) do
-					table.insert(ui.playlistmenu_items, {
-						lied.Pos .. "\t" .. lied.Artist .. " ~ " .. lied.Title,
+
+	mpd.ui.playlistmenuitems =
+		function (first, last)
+			local pmitems = {}
+			for P=first,last do
+				local lied = playlist.items[P]
+				table.insert(pmitems, {
+					lied.Pos .. "\t" .. lied.Artist .. " ~ " .. lied.Title,
+					function ()
+						playback.Play(lied.Pos)
+					end
+				})
+			end
+			return pmitems
+		end
+
+	mpd.ui.playlistmenu =
+		function (menu_length, pos1, pos2)
+			ui.playlistmenu_chunks = {}
+			local first = pos2 and pos1 or 1
+			local last = pos2 and pos2 or #playlist.items
+			local chunksize = math.ceil( (last-first+1) / menu_length )
+
+			for M=1,chunksize do
+				local higher = first+(menu_length*M)-1
+				table.insert(ui.playlistmenu_chunks,
+					ui.playlistmenuitems(first+(M-1)*menu_length, higher < last and higher or last))	
+			end
+
+			for P=1,#ui.playlistmenu_chunks do
+				ui.playlistmenu_chunks[tostring(P)] = awful.menu.new({
+					items = ui.playlistmenu_chunks[P],
+					width = 350,
+					height = 20
+				})
+				if ui.playlistmenu_chunks[P-1] then
+					table.insert(ui.playlistmenu_chunks[P], { "↑",
 						function ()
-							playback.Play(lied.Pos)
+							awful.menu.show(ui.playlistmenu_chunks[tostring(P-1)], {
+								keygrabber = true
+							})
 						end
 					})
 				end
-				ui.recreate = false
-			local awe_menu = awful.menu.new({
-				items = ui.playlistmenu_items,
-				width = 350,
-				height = 20
-			})
-			awful.menu.show(awe_menu, { keygrabber = true })
+				if ui.playlistmenu_chunks[P+1] then
+					table.insert(ui.playlistmenu_chunks[P], { "↓",
+						function ()
+							awful.menu.show(ui.playlistmenu_chunks[tostring(P+1)], {
+								keygrabber = true
+							})
+						end
+					})
+				end
+			end
+			if ui.playlistmenu_chunks[1] then
+				awful.menu.show(ui.playlistmenu[1], { keygrabber=true })
+			end
 		end
+
 	mpd.ui.playlist_submenu = 
 		function (pos)
 			local smenu_items = {}
