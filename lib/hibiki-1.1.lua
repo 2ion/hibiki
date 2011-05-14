@@ -19,12 +19,17 @@
 	along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 	This file is obtainable through https://github.com/2ion/hibiki.
+
+	For luadoc:
+	@author Jens Oliver John (twoion) <jens.o.john@gmail.com>
+	@copyright 2011 Jens Oliver John (twoion)
+	@release 1.1
+
 --]]
 
 --{{{ module environment
 local math = math
 local io = io
-local coroutine = coroutine
 local string = string
 local table = table
 local setfenv = setfenv
@@ -35,9 +40,8 @@ local ipairs = ipairs
 local tonumber = tonumber
 local tostring = tostring
 local timer = timer
-local awful = require("awful")
-local naughty = require("naughty")
-local vhelpers = require("vicious.helpers")
+local awful = awful
+local naughty = naughty
 local capi = { mouse = mouse }
 module("hibiki")
 --}}}
@@ -73,14 +77,6 @@ local function table_setfenv(table,envt)
 			table_setfenv(value, envt)
 		end
 	end
-end
-
-local function table_clone(table)
-	local t = {}
-	for key,value in pairs(table) do
-		t[key] = value
-	end
-	return t
 end
 
 local function probe_icons()
@@ -158,10 +154,27 @@ local function register_daemon(daemon_table)
 			noteconf.timeout = 5
 			naughty.notify(noteconf)
 		end
+	mpd.notify.playlist2 =
+		function (notelength, timeout)
+			notify.notechunks = {}
+			local last = #playlist.items
+			local chunksize = math.ceil(last / notelength)
+			for M=1,chunksize do
+				local higher = M * notelength
+				table.insert(notify.notechunks,
+					ui.playlistmenutext(1+(M-1)*notelength, higher < last and higher or last))
+			end
+			local noteconf = notify.conf
+			noteconf.timeout = timeout and timeout or 5
+			for N=1,#notify.notechunks do
+				noteconf.text = notify.notechunks[N]
+				naughty.notify(noteconf)
+			end
+		end
 	mpd.notify.state = 
 		function ()
 			local lied = mpd.playlist.items[tonumber(mpd.status.new.song)+1]
-			local text = lied.Pos .. "  <span font_desc=\"DejaVu Sans 13\">"..lied.Title.."</span>".."<span font_desc=\"DejaVu Sans 11\"><br>" .. 
+			local text = lied.Pos .. "  <span font_desc=\"Terminus 15\">"..lied.Title.."</span>".."<span font_desc=\"Terminus 11\"><br>" .. 
 				lied.Album.." ("..lied.Date..")\n"..lied.Artist .. "</span>"
 			local title = ""
 			if mpd.status.new.state == "play" then
@@ -193,7 +206,32 @@ local function register_daemon(daemon_table)
 			end
 			return pmitems
 		end
+	
+	mpd.ui.playlistmenutext =
+		function (first, last)
+			naughty.notify({text="playlistmenutext()".."first="..first.."last="..last})
+			local text = ""
+			local first = true
+			for P=first,last do
+				local lied = playlist.items[P]
+				if first then
+					text = lied.Pos .. "\t" .. lied.Artist .. " ~ " .. lied.Title
+					first = false
+				else
+					text = text .. "\n" .. lied.Pos .. "\t" .. lied.Artist .. " ~ " .. lied.Title
+				end
+			end
+			return text
+		end
 
+	--- Displays a menu with playlist entries.
+	-- If an entry is selected, the assigned title will be played.
+	-- The menu will be displayed under the cursor.
+	-- The menu will be opened at the page containing the song being just played, if any.
+	-- @param menu_length The menu length. If the number of entries exceedes this boundary,
+	-- additional pages are created. You can browse using additional navigation entries.
+	-- @param pos1 First element of the range of playlist positions to be included.
+	-- @param pos2 Last element of the range of playlist positions to be included.
 	mpd.ui.playlistmenu =
 		function (menu_length, pos1, pos2)
 			ui.playlistmenu_chunks = {}
@@ -213,7 +251,7 @@ local function register_daemon(daemon_table)
 						awful.menu.show(
 							awful.menu.new({
 								items = ui.playlistmenu_chunks[P],
-								width = 350,
+								width = 500,
 								height = 20
 							}),
 							{ keygrabber = true, coords = ui.playlistmenu_chunks.coords }
@@ -238,7 +276,27 @@ local function register_daemon(daemon_table)
 			end
 			
 			ui.playlistmenu_chunks.coords = capi.mouse.coords()
-			if ui.playlistmenu_chunks["1"] then ui.playlistmenu_chunks["1"]() end
+
+			local cp=tonumber(status.new.song)
+			
+			if cp >= first and cp <= last then
+				ui.playlistmenu_chunks[tostring(math.ceil( (cp+1-first) / menu_length ))]()
+			elseif ui.playlistmenu_chunks["1"] then
+				ui.playlistmenu_chunks["1"]()
+			end
+			
+			end
+	
+	mpd.ui.playlistsubmenu =
+		function (pos)
+			local submenu = {}
+			table.insert(submenu, {
+				"Remove",
+				function ()
+					playlist.delete(pos)
+				end
+			})
+			return submenu
 		end
 
 	mpd.ui.playlist_submenu = 
@@ -277,10 +335,11 @@ local function register_daemon(daemon_table)
 		end
 
 	mpd.status = {}
+
 	mpd.status.diff = 
 		function ()
 			if status.new then
-				status.old = table_clone(status.new)
+				status.old = awful.util.table.clone(status.new)
 			else
 				status.old = {}
 			end
@@ -335,7 +394,7 @@ local function register_daemon(daemon_table)
 						index = index + 1
 						playlist.items[index] = { file = value }
 					else
-						playlist.items[index][key] = vhelpers.escape(value)
+						playlist.items[index][key] = value
 					end
 				end
 			end
@@ -435,22 +494,33 @@ local function register_daemon(daemon_table)
 	table.insert(DAEMONS, mpd)
 end
 
-
+--- Launches hibiki's event processing loop.
+-- If you happen to want results, try a call.
 function exec()
 	TIMER:start()
 	TIMER:emit_signal("timeout")
 end
 
+--- Stops hibiki's event processing loop.
 function unexec()
 	TIMER:stop()
 end
 
+--- Dispatches  the daemons' event processing functions.
+-- Will be extended to work based off coroutines soon.
 function serial()
 	for key,daemon in ipairs(DAEMONS) do
 		daemon.status.diff()
 	end
 end
 
+
+--- Registers the daemons to be handled.
+-- @param mpds A table of tables for every daemon to be handled, containing the
+-- following fields: host [hostname or IP address of the box a mpd runs on, nil
+-- will default to "127.0.0.1"], port [nil will default to 6600], password
+-- [if your instance of mpd is protected, nil means no password].
+-- @param timeout Period of status change detection in seconds.
 function init(mpds, timeout)
 	for key,daemon_table in ipairs(mpds) do
 		register_daemon(daemon_table)
