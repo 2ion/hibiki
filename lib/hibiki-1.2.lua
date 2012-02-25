@@ -438,7 +438,7 @@ local function register_daemon(daemon_table)
 		end
 	mpd.playback.Volume = 
 		function (percent)
-			set("setvol", percend and percent or 0)
+			set("setvol", percent and percent or 0)
 		end
 	mpd.playback.Crossfade = 
 		function (seconds)
