@@ -1,13 +1,6 @@
-<!--
-hibiki README page.
-Written by Jens Oliver John <jens.o.john@gmail.com>.
-I modeled this page's design after <http://www.greenend.org.uk/rjk/2010/autoforward.html>.
-My thanks.
--->
 <html>
 <head>
 <meta name="author" content="Jens Oliver John <jens.o.john@gmail.com>">
-<meta name="description" content="github.com/2ion/hibiki:README">
 <style type="text/css">
 body 		{ color:black; background-color:white; font-family:sans-serif;}
 a:link		{ text-decoration:none; color:black; }
@@ -22,7 +15,6 @@ div:centerbox	{ text-align:center; font-style:italic; display:block; }
 <title>hibiki</title>
 </head>
 <body>
-</body>
 
 <h1>hibiki</h1>
 	<div style="text-align:center; font-style:italic;">
@@ -43,5 +35,6 @@ div:centerbox	{ text-align:center; font-style:italic; display:block; }
 <div style="text-align:center; font-style:italic; font-size:10pt;">
 Written by <a href="https://github.com/2ion">Jens Oliver John (2ion)</a>. This site has been published on <a href="https://github.com/2ion/hibiki">github.com</a> as part of the <i>hibiki</i> open source project and will be revisioned as it seems necessary to the author. To this document, the current <i>hibiki</i> project's license applies.
 </div>
+</body>
 </html>
 
